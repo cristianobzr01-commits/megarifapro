@@ -352,8 +352,9 @@ const App: React.FC = () => {
     const queryDigits = query.replace(/\D/g, "");
     
     if (queryDigits.length >= 8) {
-      // Defensive check to ensure it's a Map
-      (raffle.phoneToNumbers as Map<string, number[]>).forEach((nums, phone) => {
+      // Fix for line 298: Wrapping raffle.phoneToNumbers iteration in Array.from to fix iterator issue
+      const phoneEntries = Array.from((raffle.phoneToNumbers as Map<string, number[]>).entries());
+      phoneEntries.forEach(([phone, nums]) => {
         if (phone.includes(queryDigits)) {
           nums.forEach(n => foundNumbers.push(n));
         }
@@ -402,7 +403,7 @@ const App: React.FC = () => {
             SAIR ADM
           </button>
           <button onClick={() => setIsAdminSettingsOpen(true)} className="bg-indigo-600 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl hover:bg-indigo-700 transition-all flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573 1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             CONFIGURAÇÕES
           </button>
         </div>
@@ -457,7 +458,7 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 -mt-12 relative z-20">
-        <Dashboard total={raffle.totalNumbers} sold={raffle.soldNumbers.size} reserved={raffle.reservedNumbers.size} revenue={raffle.soldNumbers.size * raffle.pricePerNumber} />
+        <Dashboard total={raffle.totalNumbers} sold={raffle.soldNumbers.size} reserved={raffle.reservedNumbers.size} revenue={raffle.soldNumbers.size * raffle.pricePerNumber} isAdmin={isAdmin} />
         
         <div className="bg-white p-4 rounded-[32px] shadow-xl border border-slate-100 mb-8 flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="relative flex-1 w-full group">
@@ -499,6 +500,7 @@ const App: React.FC = () => {
             <p className="text-slate-500 mb-4">Vincule seus {isPurchasing.length} bilhetes. Limite global: {raffle.maxEntriesPerPhone} un.</p>
             
             <div className="space-y-5">
+              {/* Fix for line 502: Changed setUserName call to an arrow function receiving event 'e' */}
               <input type="text" placeholder="Nome Completo" value={userName} onChange={e => setUserName(e.target.value)} className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
               
               <div className="relative">
