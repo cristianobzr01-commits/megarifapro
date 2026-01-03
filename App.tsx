@@ -352,19 +352,18 @@ const App: React.FC = () => {
     const queryDigits = query.replace(/\D/g, "");
     
     if (queryDigits.length >= 8) {
-      // Fix for line 298: Wrapping raffle.phoneToNumbers iteration in Array.from to fix iterator issue
-      const phoneEntries = Array.from((raffle.phoneToNumbers as Map<string, number[]>).entries());
-      phoneEntries.forEach(([phone, nums]) => {
+      // Fix for line 298: Iterating directly over raffle.phoneToNumbers Map to avoid potential iterator issues with Array.from in some environments
+      raffle.phoneToNumbers.forEach((nums, phone) => {
         if (phone.includes(queryDigits)) {
           nums.forEach(n => foundNumbers.push(n));
         }
       });
     }
 
-    (raffle.participants as Map<string, Participant>).forEach((participant, pId) => {
+    raffle.participants.forEach((participant, pId) => {
       const nameMatch = participant.name.toLowerCase().includes(query);
       if (nameMatch) {
-        (raffle.numberOwners as Map<number, string>).forEach((ownerId, numberId) => {
+        raffle.numberOwners.forEach((ownerId, numberId) => {
           if (ownerId === pId) foundNumbers.push(numberId);
         });
       }
@@ -403,7 +402,7 @@ const App: React.FC = () => {
             SAIR ADM
           </button>
           <button onClick={() => setIsAdminSettingsOpen(true)} className="bg-indigo-600 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl hover:bg-indigo-700 transition-all flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573 1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             CONFIGURAÇÕES
           </button>
         </div>
@@ -450,7 +449,7 @@ const App: React.FC = () => {
             <span className="text-xs uppercase opacity-60 font-bold tracking-[0.2em]">Adquira já o seu</span>
             <div className="text-6xl font-black my-4">R$ {raffle.pricePerNumber.toFixed(2)}</div>
             <div className="space-y-3 mt-8">
-              <button onClick={() => buyRandom(10)} className="w-full bg-white text-indigo-900 py-4 rounded-2xl font-black text-lg shadow-xl hover:scale-[1.02] active:scale-95 transition-all">Comprar 10 Bilhetes</button>
+              <button onClick={() => buyRandom(10)} className="w-full bg-white text-indigo-900 py-4 rounded-2xl font-black text-lg shadow-xl hover:scale-[1.02] active:scale-95 transition-all">Comprar Bilhete</button>
             </div>
             <p className="text-[10px] mt-6 opacity-50 uppercase tracking-widest font-black">Limite global: {raffle.maxEntriesPerPhone} un. por telefone</p>
           </div>
@@ -500,7 +499,6 @@ const App: React.FC = () => {
             <p className="text-slate-500 mb-4">Vincule seus {isPurchasing.length} bilhetes. Limite global: {raffle.maxEntriesPerPhone} un.</p>
             
             <div className="space-y-5">
-              {/* Fix for line 502: Changed setUserName call to an arrow function receiving event 'e' */}
               <input type="text" placeholder="Nome Completo" value={userName} onChange={e => setUserName(e.target.value)} className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
               
               <div className="relative">
