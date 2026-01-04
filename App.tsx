@@ -13,6 +13,20 @@ const TOTAL_NUMBERS = 1000000;
 const RESERVATION_TIME = 5 * 60 * 1000;
 const ADMIN_PASSWORD = "198830cb";
 
+const DEFAULT_DESCRIPTION = ` 🏁 PIX DE R$ 500 OU CAPACETE: QUAL VAI SER? 🏁
+
+O mês está acabando, mas a sua sorte está só começando! Participar da nossa rifa é simples, barato e pode te render um prêmio sensacional. 🤩
+
+✨ O QUE ESTÁ EM JOGO:
+1️⃣ R$ 500,00 NO PIX (Dinheiro na mão, sem burocracia!)
+2️⃣ OU UM CAPACETE TOP (Para quem vive em duas rodas!)
+
+📊 **NÚMEROS DA SORTE:
+Temos 1 milhão de bilhetes disponíveis. É o "Rifão do Milhão"! Escolha seus números favoritos e entre na disputa.
+
+⚠️ **REGRAS DO JOGO:**
+Sorteio realizado pela Federal no último dia do mês. É seguro, é justo, é a sua chance! 🏦✨`;
+
 const App: React.FC = () => {
   // Carregar estado inicial do localStorage se existir
   const loadInitialState = (): RaffleState => {
@@ -52,8 +66,8 @@ const App: React.FC = () => {
   const [adminPassInput, setAdminPassInput] = useState("");
   
   // Estados para Informações da Rifa (Persistentes)
-  const [description, setDescription] = useState(() => localStorage.getItem('raffle_description') || "Carregando descrição...");
-  const [prizeName, setPrizeName] = useState(() => localStorage.getItem('raffle_prize_name') || "PIX DA SORTE R$500 OU CAPACETE");
+  const [description, setDescription] = useState(() => localStorage.getItem('raffle_description') || DEFAULT_DESCRIPTION);
+  const [prizeName, setPrizeName] = useState(() => localStorage.getItem('raffle_prize_name') || "PIX DA SORTE $500 OU CAPACETE");
   
   // Estados de edição temporária
   const [tempDescription, setTempDescription] = useState(description);
@@ -126,6 +140,7 @@ const App: React.FC = () => {
   }, [myPurchases]);
 
   useEffect(() => {
+    // Só gera se estiver com o placeholder padrão de carregamento, caso contrário respeita o DEFAULT_DESCRIPTION
     if (!hasInitialDescription.current && description === "Carregando descrição...") {
       const fetchDescription = async () => {
         const desc = await generateRaffleDescription(prizeName);
@@ -352,7 +367,6 @@ const App: React.FC = () => {
     const queryDigits = query.replace(/\D/g, "");
     
     if (queryDigits.length >= 8) {
-      // Fix for line 298: Iterating directly over raffle.phoneToNumbers Map to avoid potential iterator issues with Array.from in some environments
       raffle.phoneToNumbers.forEach((nums, phone) => {
         if (phone.includes(queryDigits)) {
           nums.forEach(n => foundNumbers.push(n));
