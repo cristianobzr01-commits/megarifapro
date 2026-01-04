@@ -53,7 +53,7 @@ const App: React.FC = () => {
   
   // Estados para Informações da Rifa (Persistentes)
   const [description, setDescription] = useState(() => localStorage.getItem('raffle_description') || "Carregando descrição...");
-  const [prizeName, setPrizeName] = useState(() => localStorage.getItem('raffle_prize_name') || "BMW M3 Competition 0km");
+  const [prizeName, setPrizeName] = useState(() => localStorage.getItem('raffle_prize_name') || "PIX DA SORTE R$500 OU CAPACETE");
   
   // Estados de edição temporária
   const [tempDescription, setTempDescription] = useState(description);
