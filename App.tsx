@@ -13,13 +13,13 @@ const TOTAL_NUMBERS = 1000000;
 const RESERVATION_TIME = 5 * 60 * 1000;
 const ADMIN_PASSWORD = "198830cb";
 
-const DEFAULT_DESCRIPTION = ` 🏁 PIX DE R$ 500 OU CAPACETE: QUAL VAI SER? 🏁
+const DEFAULT_DESCRIPTION = ` 🏁 PIX DE R$ 500 OU CAPACETE ZERO: QUAL VAI SER? 🏁
 
 O mês está acabando, mas a sua sorte está só começando! Participar da nossa rifa é simples, barato e pode te render um prêmio sensacional. 🤩
 
 ✨ O QUE ESTÁ EM JOGO:
 1️⃣ R$ 500,00 NO PIX (Dinheiro na mão, sem burocracia!)
-2️⃣ OU UM CAPACETE TOP (Para quem vive em duas rodas!)
+2️⃣ OU UM CAPACETE ZERO (Novinho, direto para você!)
 
 📊 **NÚMEROS DA SORTE:
 Temos 1 milhão de bilhetes disponíveis. É o "Rifão do Milhão"! Escolha seus números favoritos e entre na disputa.
@@ -66,7 +66,7 @@ const App: React.FC = () => {
   const [adminPassInput, setAdminPassInput] = useState("");
   
   const [description, setDescription] = useState(() => localStorage.getItem('raffle_description') || DEFAULT_DESCRIPTION);
-  const [prizeName, setPrizeName] = useState(() => localStorage.getItem('raffle_prize_name') || "PIX DA SORTE $500 OU CAPACETE");
+  const [prizeName, setPrizeName] = useState(() => localStorage.getItem('raffle_prize_name') || "PIX DA SORTE $500 OU CAPACETE ZERO");
   const [prizeImage, setPrizeImage] = useState(() => localStorage.getItem('raffle_prize_image') || "");
   
   const [tempDescription, setTempDescription] = useState(description);
@@ -270,7 +270,6 @@ const App: React.FC = () => {
   };
 
   const handlePurchase = useCallback(() => {
-    // Explicitly narrowing isPurchasing to ensure TypeScript doesn't treat it as null/unknown
     if (!isPurchasing || isPurchasing.length === 0) return;
     if (!userName.trim() || !userPhone.trim() || !userEmail.trim() || emailError || phoneError) {
       alert("Preencha seus dados corretamente.");
@@ -289,7 +288,6 @@ const App: React.FC = () => {
     const now = Date.now();
     const participantId = `p-${now}-${Math.random().toString(36).substr(2, 5)}`;
     
-    // Explicitly typing the previous state in the setter to avoid "unknown" type issues during complex object transformations.
     setRaffle((prev: RaffleState) => {
       const nextSold = new Set(prev.soldNumbers);
       const nextOwners = new Map(prev.numberOwners);
