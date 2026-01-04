@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { NumberStatus, Participant, RaffleState, Purchase } from './types';
 import NumberGrid from './components/NumberGrid';
 import Dashboard from './components/Dashboard';
-import { generateRaffleDescription, announceWinner } from './services/geminiService';
+import { generateRaffleDescription, announceWinner, generatePrizeImage } from './services/geminiService';
 
 const PAGE_SIZE = 100;
 const INITIAL_PRICE = 10.00;
@@ -33,12 +33,12 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('raffle_settings');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
+        const parsed = JSON.parse(saved) as any;
         return {
           ...parsed,
           soldNumbers: new Set(parsed.soldNumbers || []),
           numberOwners: new Map(parsed.numberOwners || []),
-          reservedNumbers: new Map(), // Reservas não persistem
+          reservedNumbers: new Map(),
           participants: new Map(parsed.participants || []),
           phoneToNumbers: new Map(parsed.phoneToNumbers || []),
         };
@@ -65,23 +65,24 @@ const App: React.FC = () => {
   const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
   const [adminPassInput, setAdminPassInput] = useState("");
   
-  // Estados para Informações da Rifa (Persistentes)
   const [description, setDescription] = useState(() => localStorage.getItem('raffle_description') || DEFAULT_DESCRIPTION);
   const [prizeName, setPrizeName] = useState(() => localStorage.getItem('raffle_prize_name') || "PIX DA SORTE $500 OU CAPACETE");
+  const [prizeImage, setPrizeImage] = useState(() => localStorage.getItem('raffle_prize_image') || "");
   
-  // Estados de edição temporária
   const [tempDescription, setTempDescription] = useState(description);
   const [tempPrizeName, setTempPrizeName] = useState(prizeName);
+  const [tempImageUrl, setTempImageUrl] = useState("");
   const [aiInstruction, setAiInstruction] = useState("");
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [isGeneratingImg, setIsGeneratingImg] = useState(false);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [isPurchasing, setIsPurchasing] = useState<number[] | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [winnerMessage, setWinnerMessage] = useState<string | null>(null);
   
-  // Dados do Usuário
   const [userName, setUserName] = useState("");
   const [userPhone, setUserPhone] = useState("");
   const [userEmail, setUserEmail] = useState("");
@@ -91,13 +92,13 @@ const App: React.FC = () => {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [myPurchases, setMyPurchases] = useState<Purchase[]>([]);
   
-  const hasInitialDescription = useRef(false);
+  const hasInitialData = useRef(false);
 
-  // Persistência
   useEffect(() => {
     localStorage.setItem('raffle_description', description);
     localStorage.setItem('raffle_prize_name', prizeName);
-  }, [description, prizeName]);
+    localStorage.setItem('raffle_prize_image', prizeImage);
+  }, [description, prizeName, prizeImage]);
 
   useEffect(() => {
     const settingsToSave = {
@@ -110,7 +111,6 @@ const App: React.FC = () => {
     localStorage.setItem('raffle_settings', JSON.stringify(settingsToSave));
   }, [raffle]);
 
-  // Memoizado para checar o limite atual do usuário
   const currentUserEntryCount = useMemo(() => {
     const normalized = userPhone.replace(/\D/g, "");
     if (normalized.length < 8) return 0;
@@ -126,7 +126,7 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('raffle_purchase_history');
     if (saved) {
       try {
-        setMyPurchases(JSON.parse(saved));
+        setMyPurchases(JSON.parse(saved) as Purchase[]);
       } catch (e) {
         console.error("Error loading history", e);
       }
@@ -140,17 +140,17 @@ const App: React.FC = () => {
   }, [myPurchases]);
 
   useEffect(() => {
-    // Só gera se estiver com o placeholder padrão de carregamento, caso contrário respeita o DEFAULT_DESCRIPTION
-    if (!hasInitialDescription.current && description === "Carregando descrição...") {
-      const fetchDescription = async () => {
-        const desc = await generateRaffleDescription(prizeName);
-        setDescription(desc);
-        setTempDescription(desc);
-        hasInitialDescription.current = true;
+    if (!hasInitialData.current) {
+      const initData = async () => {
+        if (!prizeImage || prizeImage === "") {
+          const img = await generatePrizeImage(prizeName);
+          if (img) setPrizeImage(img);
+        }
+        hasInitialData.current = true;
       };
-      fetchDescription();
+      initData();
     }
-  }, [prizeName, description]);
+  }, [prizeName, prizeImage]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -162,7 +162,6 @@ const App: React.FC = () => {
         if (now >= data.expiresAt) {
           nextReserved.delete(num);
           changed = true;
-          // Use current isPurchasing value from closure properly
           setIsPurchasing(prev => {
             if (prev && prev.includes(num)) return null;
             return prev;
@@ -271,14 +270,14 @@ const App: React.FC = () => {
   };
 
   const handlePurchase = useCallback(() => {
-    // Defensive copy of isPurchasing to avoid closure/null issues
-    const ticketsToBuy = isPurchasing;
+    // Explicitly narrowing isPurchasing to ensure TypeScript doesn't treat it as null/unknown
+    if (!isPurchasing || isPurchasing.length === 0) return;
     if (!userName.trim() || !userPhone.trim() || !userEmail.trim() || emailError || phoneError) {
       alert("Preencha seus dados corretamente.");
       return;
     }
-    if (!ticketsToBuy) return;
-
+    
+    const ticketsToBuy = isPurchasing;
     const normalizedPhone = userPhone.replace(/\D/g, "");
     const existingNumbers = raffle.phoneToNumbers.get(normalizedPhone) || [];
 
@@ -290,7 +289,8 @@ const App: React.FC = () => {
     const now = Date.now();
     const participantId = `p-${now}-${Math.random().toString(36).substr(2, 5)}`;
     
-    setRaffle(prev => {
+    // Explicitly typing the previous state in the setter to avoid "unknown" type issues during complex object transformations.
+    setRaffle((prev: RaffleState) => {
       const nextSold = new Set(prev.soldNumbers);
       const nextOwners = new Map(prev.numberOwners);
       const nextReserved = new Map(prev.reservedNumbers);
@@ -344,6 +344,10 @@ const App: React.FC = () => {
   const saveAdminSettings = () => {
     setPrizeName(tempPrizeName);
     setDescription(tempDescription);
+    if (tempImageUrl.trim() !== "") {
+      setPrizeImage(tempImageUrl);
+      setTempImageUrl("");
+    }
     setIsAdminSettingsOpen(false);
   };
 
@@ -352,6 +356,25 @@ const App: React.FC = () => {
     const newDesc = await generateRaffleDescription(tempPrizeName, aiInstruction);
     setTempDescription(newDesc);
     setIsGeneratingAi(false);
+  };
+
+  const handleRegenerateImage = async () => {
+    setIsGeneratingImg(true);
+    const newImg = await generatePrizeImage(tempPrizeName);
+    if (newImg) setPrizeImage(newImg);
+    setIsGeneratingImg(false);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setPrizeImage(base64String);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const numbersToDisplay = useMemo(() => {
@@ -454,12 +477,22 @@ const App: React.FC = () => {
 
       <header className="bg-indigo-900 text-white pt-10 pb-24 px-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-12 items-center relative z-10">
-          <div className="flex-1">
-             <h1 className="text-4xl md:text-6xl font-black mb-6 leading-tight">{prizeName}</h1>
-             <p className="text-indigo-100 text-lg opacity-90 leading-relaxed max-w-2xl whitespace-pre-wrap">{description}</p>
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-12 items-start relative z-10">
+          <div className="flex-1 space-y-8">
+             <div className="space-y-4">
+               <h1 className="text-4xl md:text-6xl font-black leading-tight">{prizeName}</h1>
+               <p className="text-indigo-100 text-lg opacity-90 leading-relaxed max-w-2xl whitespace-pre-wrap">{description}</p>
+             </div>
+             
+             {prizeImage && (
+               <div className="relative group max-w-2xl rounded-[40px] overflow-hidden shadow-2xl border-4 border-white/10 aspect-video">
+                 <img src={prizeImage} alt={prizeName} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                 <div className="absolute inset-0 bg-gradient-to-t from-indigo-900/40 to-transparent pointer-events-none" />
+               </div>
+             )}
           </div>
-          <div className="shrink-0 w-full md:w-96 bg-white/5 backdrop-blur-xl p-8 rounded-[40px] border border-white/10 text-center shadow-2xl">
+          
+          <div className="shrink-0 w-full md:w-96 bg-white/5 backdrop-blur-xl p-8 rounded-[40px] border border-white/10 text-center shadow-2xl sticky top-8">
             <span className="text-xs uppercase opacity-60 font-bold tracking-[0.2em]">Adquira já o seu</span>
             <div className="text-6xl font-black my-4">R$ {raffle.pricePerNumber.toFixed(2)}</div>
             <div className="space-y-3 mt-8">
@@ -492,7 +525,6 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Barra de Ações Flutuante */}
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-50">
         <button onClick={() => setIsHistoryOpen(true)} className="bg-indigo-900 text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-3 font-black hover:scale-105 transition-all">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
@@ -505,7 +537,6 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* Modal de Compra/Identificação */}
       {isPurchasing && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-lg rounded-[40px] p-10 shadow-2xl animate-in fade-in zoom-in duration-300">
@@ -550,10 +581,9 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de Configurações Administrativas */}
       {isAdminSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[150] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-[40px] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="bg-white w-full max-w-3xl rounded-[40px] overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
              <div className="p-8 bg-indigo-900 text-white flex justify-between items-center">
                 <h3 className="text-2xl font-black">Configurações da Rifa</h3>
                 <button onClick={() => setIsAdminSettingsOpen(false)} className="opacity-60 hover:opacity-100"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -569,65 +599,91 @@ const App: React.FC = () => {
                    />
                 </div>
 
-                <div>
-                   <div className="flex justify-between items-center mb-2">
-                     <label className="text-[10px] uppercase font-black text-slate-400">Descrição da Rifa</label>
-                     <button 
-                      onClick={handleRegenerateDescription}
-                      disabled={isGeneratingAi}
-                      className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:underline disabled:opacity-30"
-                     >
-                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                       {isGeneratingAi ? 'GERANDO...' : 'REGERAR COM IA'}
-                     </button>
-                   </div>
-                   <textarea 
-                    value={tempDescription} 
-                    onChange={e => setTempDescription(e.target.value)}
-                    rows={6}
-                    className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 leading-relaxed"
-                   />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <label className="text-[10px] uppercase font-black text-slate-400">Gerenciar Foto do Prêmio</label>
+                    <div className="aspect-video bg-slate-100 rounded-3xl overflow-hidden border-2 border-dashed border-slate-300 relative group flex items-center justify-center">
+                      {prizeImage ? (
+                        <img src={prizeImage} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="text-slate-300 flex flex-col items-center">
+                          <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>
+                          <span className="font-bold text-xs mt-2 uppercase tracking-widest">Sem Imagem</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="bg-white border-2 border-slate-200 text-slate-700 p-4 rounded-2xl font-black text-xs uppercase tracking-widest flex flex-col items-center gap-2 hover:border-indigo-500 hover:text-indigo-600 transition-all"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        Upload
+                      </button>
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleFileUpload} 
+                        className="hidden" 
+                        accept="image/*" 
+                      />
+                      
+                      <button 
+                        onClick={handleRegenerateImage}
+                        disabled={isGeneratingImg}
+                        className="bg-indigo-50 text-indigo-600 p-4 rounded-2xl font-black text-xs uppercase tracking-widest flex flex-col items-center gap-2 hover:bg-indigo-100 transition-all disabled:opacity-50"
+                      >
+                        <svg className={`w-5 h-5 ${isGeneratingImg ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        Gerar c/ IA
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[9px] uppercase font-black text-slate-400 px-2">Ou cole um Link (URL)</label>
+                       <div className="relative">
+                          <input 
+                            type="text" 
+                            placeholder="https://..." 
+                            value={tempImageUrl}
+                            onChange={e => setTempImageUrl(e.target.value)}
+                            className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-sm"
+                          />
+                          <svg className="w-5 h-5 absolute right-4 top-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                       </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-[10px] uppercase font-black text-slate-400">Descrição Detalhada</label>
+                        <button onClick={handleRegenerateDescription} disabled={isGeneratingAi} className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:underline disabled:opacity-30">
+                          {isGeneratingAi ? 'GERANDO...' : 'REGERAR IA'}
+                        </button>
+                      </div>
+                      <textarea value={tempDescription} onChange={e => setTempDescription(e.target.value)} rows={10} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 leading-relaxed text-sm" />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="p-6 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                   <label className="block text-[10px] uppercase font-black text-indigo-400 mb-2">Instrução para a IA (Opcional)</label>
-                   <input 
-                    type="text" 
-                    placeholder="Ex: 'mais formal', 'destaque que é beneficente', 'use tom de urgência'"
-                    value={aiInstruction}
-                    onChange={e => setAiInstruction(e.target.value)}
-                    className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-400 text-sm italic"
-                   />
+                <div className="p-6 bg-amber-50 rounded-3xl border-2 border-dashed border-amber-200">
+                   <label className="block text-[10px] uppercase font-black text-amber-600 mb-2">Instrução para a IA (Opcional)</label>
+                   <input type="text" placeholder="Ex: 'mais formal', 'destaque que é beneficente'" value={aiInstruction} onChange={e => setAiInstruction(e.target.value)} className="w-full p-3 bg-white rounded-xl border border-amber-100 outline-none focus:ring-2 focus:ring-amber-400 text-sm italic" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                    <div>
                       <label className="block text-[10px] uppercase font-black text-slate-400 mb-2">Preço por Número (R$)</label>
-                      <input 
-                        type="number" 
-                        step="0.5"
-                        value={raffle.pricePerNumber} 
-                        onChange={e => setRaffle({...raffle, pricePerNumber: parseFloat(e.target.value)})}
-                        className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
-                      />
+                      <input type="number" step="0.5" value={raffle.pricePerNumber} onChange={e => setRaffle({...raffle, pricePerNumber: parseFloat(e.target.value)})} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
                    </div>
                    <div>
                       <label className="block text-[10px] uppercase font-black text-slate-400 mb-2">Limite p/ Telefone</label>
-                      <input 
-                        type="number" 
-                        value={raffle.maxEntriesPerPhone} 
-                        onChange={e => setRaffle({...raffle, maxEntriesPerPhone: parseInt(e.target.value)})}
-                        className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
-                      />
+                      <input type="number" value={raffle.maxEntriesPerPhone} onChange={e => setRaffle({...raffle, maxEntriesPerPhone: parseInt(e.target.value)})} className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
                    </div>
                 </div>
 
-                <button 
-                  onClick={runDraw}
-                  className="w-full bg-amber-500 text-white py-4 rounded-2xl font-black text-lg shadow-xl hover:bg-amber-600 transition-all uppercase tracking-widest"
-                >
-                  Sorteio Instantâneo
-                </button>
+                <button onClick={runDraw} className="w-full bg-amber-500 text-white py-4 rounded-2xl font-black text-lg shadow-xl hover:bg-amber-600 transition-all uppercase tracking-widest">Sorteio Instantâneo</button>
              </div>
              <div className="p-8 bg-slate-50 border-t border-slate-100 flex gap-4">
                 <button onClick={() => setIsAdminSettingsOpen(false)} className="flex-1 py-4 font-bold text-slate-400">Descartar</button>
@@ -637,7 +693,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Vencedor */}
       {winnerMessage && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[200] flex items-center justify-center p-4">
           <div className="bg-white max-w-2xl w-full rounded-[60px] p-12 text-center shadow-2xl animate-in zoom-in duration-500">
@@ -652,7 +707,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Login Admin */}
       {isAdminLoginOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white w-full max-sm rounded-[32px] p-8 shadow-2xl">
