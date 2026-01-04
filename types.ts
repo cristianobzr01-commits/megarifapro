@@ -27,21 +27,17 @@ export interface RaffleNumber {
 export interface RaffleState {
   totalNumbers: number;
   pricePerNumber: number;
-  maxPurchaseLimit: number; // Limite de números por transação (compra rápida)
-  maxEntriesPerPhone: number; // Limite máximo de números por telefone/pessoa
+  maxPurchaseLimit: number;
+  maxEntriesPerPhone: number;
   soldNumbers: Set<number>;
-  numberOwners: Map<number, string>; // Mapeia número -> ID do participante
+  numberOwners: Map<number, string>;
   reservedNumbers: Map<number, { expiresAt: number }>;
   participants: Map<string, Participant>;
-  phoneToNumbers: Map<string, number[]>; // Novo: Mapeia telefone normalizado -> lista de números comprados
+  phoneToNumbers: Map<string, number[]>;
+  participantToNumbers: Map<string, number[]>;
   winner?: {
     number: number;
     participant: Participant;
+    message?: string;
   };
-}
-
-export interface AppState {
-  raffle: RaffleState;
-  viewingPage: number;
-  searchQuery: string;
 }
